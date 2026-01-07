@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set } from "firebase/database";
-import { 
-  Package, 
-  Settings, 
-  CheckCircle2, 
-  Circle, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Save, 
-  X, 
-  Loader2, 
+import {
+  LayoutDashboard,
+  Package,
+  Settings,
+  CheckCircle2,
+  Circle,
+  Plus,
+  Trash2,
+  Edit3,
+  Save,
+  X,
+  Loader2,
   ShoppingCart,
+  CalendarDays,
   History,
-  Wine 
+  Wine
 } from 'lucide-react';
+import logo from './bobbys-logo.png'; // Make sure this path is correct
 
 // === YOUR FIREBASE CONFIG ===
 const firebaseConfig = {
@@ -31,15 +34,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// === NEW "WINE BAR" THEME ===
+// Define the new color palette
 const colors = {
-  primary: '#5D0E2A',   // Deep Burgundy (Logo Background)
-  secondary: '#F4EFE8', // Cream (Logo Text)
-  accent: '#D4AF37',    // Gold (Accent)
-  background: '#F9F6F2', // Light Cream (App Background)
-  textDark: '#3E091C',  // Dark Burgundy (Text)
-  success: '#2E7D32',   // Green
-  danger: '#C62828',    // Red
+  primary: '#5D0E2A',   // Deep Burgundy from logo background
+  secondary: '#F4EFE8', // Off-White/Cream from logo text
+  accent: '#D4AF37',    // A complementary Gold/Cream for accents
+  background: '#F9F6F2', // Very light cream for main background
+  textDark: '#3E091C',  // Darker burgundy for text on light backgrounds
+  textLight: '#F4EFE8', // Off-white for text on dark backgrounds
+  success: '#2E7D32',   // Standard success green, tweaked slightly
+  danger: '#C62828',    // Standard danger red, tweaked slightly
 };
 
 const CafeOrderingApp = () => {
@@ -67,28 +71,20 @@ const CafeOrderingApp = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center" style={{ backgroundColor: colors.background }}>
       <Loader2 className="w-12 h-12 animate-spin" style={{ color: colors.primary }} />
-      <p className="mt-4 font-semibold" style={{ color: colors.textDark }}>Loading Bobby's Wine Bar...</p>
+      <p className="mt-4 font-semibold" style={{ color: colors.textDark }}>Loading System...</p>
     </div>
   );
 
   return (
     <div className="min-h-screen font-sans pb-24" style={{ backgroundColor: colors.background, color: colors.textDark }}>
-      
-      {/* HEADER WITH WINE THEME */}
-      <header className="sticky top-0 z-50 shadow-xl border-b-4" style={{ backgroundColor: colors.primary, borderColor: colors.accent }}>
-        <div className="max-w-4xl mx-auto px-4 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Logo Replacement: Wine Icon */}
-            <div className="p-2 rounded-full border-2" style={{ borderColor: colors.accent, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-              <Wine className="w-8 h-8" style={{ color: colors.secondary }} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black uppercase tracking-widest leading-none" style={{ color: colors.secondary, fontFamily: 'serif' }}>BOBBY'S</h1>
-              <p className="text-xs font-bold tracking-[0.3em] uppercase" style={{ color: colors.accent }}>Wine Bar</p>
-            </div>
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 shadow-lg border-b-4" style={{ backgroundColor: colors.primary, borderColor: colors.accent }}>
+        <div className="max-w-4xl mx-auto px-4 h-18 flex items-center justify-between">
+          <div className="flex items-center gap-3 py-2">
+            <img src={logo} alt="Bobby's Wine Bar Logo" className="h-12 w-auto" />
           </div>
-          <div className="text-xs font-medium text-right" style={{ color: colors.secondary, opacity: 0.8 }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
+          <div className="text-xs font-medium" style={{ color: colors.secondary }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
           </div>
         </div>
       </header>
@@ -96,22 +92,32 @@ const CafeOrderingApp = () => {
       {/* MAIN CONTENT */}
       <main className="max-w-4xl mx-auto p-4">
         {view === 'orders' && (
-          <OrdersView 
-            suppliers={suppliers} 
-            history={orderHistory} 
-            quantities={orderQuantities} 
-            onSave={saveToFirebase} 
+          <OrdersView
+            suppliers={suppliers}
+            history={orderHistory}
+            quantities={orderQuantities}
+            onSave={saveToFirebase}
           />
         )}
-        {view === 'history' && <HistoryView suppliers={suppliers} history={orderHistory} />}
-        {view === 'admin' && <AdminView suppliers={suppliers} onSave={(newList) => saveToFirebase('suppliers', newList)} />}
+        {view === 'history' && (
+          <HistoryView
+            suppliers={suppliers}
+            history={orderHistory}
+          />
+        )}
+        {view === 'admin' && (
+          <AdminView
+            suppliers={suppliers}
+            onSave={(newList) => saveToFirebase('suppliers', newList)}
+          />
+        )}
       </main>
 
-      {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] pb-safe" style={{ backgroundColor: colors.secondary, borderColor: colors.accent }}>
+      {/* BOTTOM NAVIGATION */}
+      <nav className="fixed bottom-0 left-0 right-0 border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe" style={{ backgroundColor: colors.secondary, borderColor: colors.accent }}>
         <div className="max-w-4xl mx-auto flex justify-around p-2">
           <NavButton icon={ShoppingCart} label="Orders" active={view === 'orders'} onClick={() => setView('orders')} />
-          <NavButton icon={History} label="Status" active={view === 'history'} onClick={() => setView('history')} />
+          <NavButton icon={History} label="History" active={view === 'history'} onClick={() => setView('history')} />
           <NavButton icon={Settings} label="Admin" active={view === 'admin'} onClick={() => setView('admin')} />
         </div>
       </nav>
@@ -120,12 +126,12 @@ const CafeOrderingApp = () => {
 };
 
 const NavButton = ({ icon: Icon, label, active, onClick }) => (
-  <button 
+  <button
     onClick={onClick}
     className={`flex flex-col items-center justify-center p-2 min-w-[4rem] rounded-xl transition-all`}
-    style={{ 
-      color: active ? colors.primary : '#A08C96',
-      backgroundColor: active ? 'rgba(93, 14, 42, 0.1)' : 'transparent',
+    style={{
+      color: active ? colors.primary : colors.textDark,
+      backgroundColor: active ? colors.accent + '40' : 'transparent', // Add transparency to accent color for background
       fontWeight: active ? 'bold' : 'normal'
     }}
   >
@@ -134,10 +140,15 @@ const NavButton = ({ icon: Icon, label, active, onClick }) => (
   </button>
 );
 
+// === 1. ORDERS VIEW ===
 const OrdersView = ({ suppliers, history, quantities, onSave }) => {
-  const getTodayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  const getTodayKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  };
   const todayKey = getTodayKey();
   const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+
   const todaysSuppliers = suppliers.filter(s => s.days && s.days.includes(dayName));
 
   const toggleStatus = (supplierId) => {
@@ -156,10 +167,10 @@ const OrdersView = ({ suppliers, history, quantities, onSave }) => {
   };
 
   if (todaysSuppliers.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-24 opacity-50">
-      <Wine className="w-20 h-20 mb-4" style={{ color: colors.primary }} />
-      <h2 className="text-2xl font-bold font-serif" style={{ color: colors.primary }}>No Deliveries</h2>
-      <p className="text-sm">Enjoy the vintage!</p>
+    <div className="flex flex-col items-center justify-center py-20" style={{ color: colors.textDark, opacity: 0.6 }}>
+      <Wine className="w-16 h-16 mb-4" style={{ color: colors.primary }} />
+      <h2 className="text-xl font-bold">No Orders Today</h2>
+      <p className="text-sm">Enjoy the quiet day!</p>
     </div>
   );
 
@@ -167,39 +178,65 @@ const OrdersView = ({ suppliers, history, quantities, onSave }) => {
     <div className="space-y-6">
       {todaysSuppliers.map(s => {
         const isCompleted = history[todayKey]?.[s.id];
+
         return (
-          <div key={s.id} className="rounded-2xl shadow-lg border-2 overflow-hidden transition-all"
-            style={{ backgroundColor: '#fff', borderColor: isCompleted ? colors.success : colors.primary }}
+          <div key={s.id} className={`rounded-2xl shadow-sm border-2 overflow-hidden transition-all`}
+            style={{
+              backgroundColor: colors.secondary,
+              borderColor: isCompleted ? colors.success : colors.primary
+            }}
           >
-            <div className="p-4 flex justify-between items-center" 
-              style={{ backgroundColor: isCompleted ? 'rgba(46, 125, 50, 0.1)' : 'rgba(93, 14, 42, 0.05)', borderBottom: `2px solid ${isCompleted ? colors.success : colors.primary}` }}>
+            {/* Supplier Header */}
+            <div className={`p-4 flex justify-between items-center`}
+              style={{
+                backgroundColor: isCompleted ? colors.success + '20' : colors.secondary,
+                borderBottom: `2px solid ${isCompleted ? colors.success : colors.primary}`
+              }}
+            >
               <div>
-                <h3 className="font-black text-xl uppercase tracking-tight font-serif" style={{ color: colors.primary }}>{s.name}</h3>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-60">{s.items?.length || 0} Items</p>
+                <h3 className="font-black text-lg uppercase tracking-tight" style={{ color: colors.primary }}>{s.name}</h3>
+                <p className="text-xs font-bold uppercase" style={{ color: colors.textDark, opacity: 0.7 }}>{s.items?.length || 0} Items</p>
               </div>
-              <button onClick={() => toggleStatus(s.id)}
-                className="flex items-center gap-2 px-4 py-3 rounded-xl font-bold text-sm uppercase transition-all shadow-md active:scale-95"
-                style={{ backgroundColor: isCompleted ? colors.success : colors.primary, color: colors.secondary }}>
+              <button
+                onClick={() => toggleStatus(s.id)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-xl font-bold text-sm uppercase transition-all active:scale-95 shadow-md`}
+                style={{
+                  backgroundColor: isCompleted ? colors.success : colors.primary,
+                  color: colors.secondary,
+                  boxShadow: isCompleted ? `0 4px 6px -1px ${colors.success}40` : `0 4px 6px -1px ${colors.primary}40`
+                }}
+              >
                 {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                {isCompleted ? 'Received' : 'Mark In'}
+                {isCompleted ? 'Done' : 'Mark Done'}
               </button>
             </div>
-            <div className="divide-y divide-stone-100">
+
+            {/* Product List */}
+            <div className="divide-y" style={{ borderColor: colors.accent + '60' }}>
               {s.items?.map(item => (
-                <div key={item.id} className="p-4 flex items-center justify-between hover:bg-stone-50">
-                  <div className="flex-1">
-                    <p className="font-bold text-lg" style={{ color: colors.textDark }}>{item.name}</p>
-                    <span className="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider" style={{ backgroundColor: colors.background, color: colors.primary }}>Par: {item.par}</span>
+                <div key={item.id} className="p-4 flex items-center justify-between hover:bg-white/50 transition-colors">
+                  <div className="flex-1 pr-4">
+                    <p className="font-bold" style={{ color: colors.textDark }}>{item.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase" style={{ backgroundColor: colors.primary + '20', color: colors.primary }}>Par: {item.par}</span>
+                    </div>
                   </div>
-                  <input 
-                    type="number" placeholder="0"
-                    className="w-20 h-12 text-center border-2 rounded-xl font-bold text-xl outline-none transition-all"
-                    style={{ backgroundColor: colors.background, borderColor: '#E5E0D8', color: colors.textDark }}
-                    onFocus={(e) => e.target.style.borderColor = colors.primary}
-                    onBlur={(e) => e.target.style.borderColor = '#E5E0D8'}
-                    value={quantities[todayKey]?.[s.id]?.[item.id] || ''}
-                    onChange={(e) => updateQty(s.id, item.id, e.target.value)}
-                  />
+                  <div className="w-24">
+                    <input
+                      type="number"
+                      placeholder="0"
+                      className="w-full h-12 text-center border-2 rounded-xl font-bold text-lg outline-none transition-all"
+                      style={{
+                        backgroundColor: colors.background,
+                        borderColor: colors.accent,
+                        color: colors.textDark,
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = colors.primary}
+                      onBlur={(e) => e.target.style.borderColor = colors.accent}
+                      value={quantities[todayKey]?.[s.id]?.[item.id] || ''}
+                      onChange={(e) => updateQty(s.id, item.id, e.target.value)}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -210,36 +247,54 @@ const OrdersView = ({ suppliers, history, quantities, onSave }) => {
   );
 };
 
+// === 2. HISTORY / MANAGER VIEW ===
 const HistoryView = ({ suppliers, history }) => {
-  const days = Array.from({length: 5}, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    return { key: `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', {weekday:'short', day:'numeric'}), dayName: d.toLocaleDateString('en-US', {weekday:'long'}).toLowerCase() };
+  const days = Array.from({ length: 5 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return {
+      key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`,
+      label: d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
+      dayName: d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+    };
   });
 
   return (
-    <div className="rounded-2xl shadow-lg border overflow-hidden bg-white" style={{ borderColor: colors.primary }}>
-      <div className="p-4 border-b" style={{ backgroundColor: colors.primary, color: colors.secondary }}>
-        <h2 className="font-bold uppercase tracking-widest text-xs">Compliance Log</h2>
+    <div className="rounded-2xl shadow-sm border overflow-hidden" style={{ backgroundColor: colors.secondary, borderColor: colors.primary }}>
+      <div className="p-4 border-b" style={{ backgroundColor: colors.primary + '10', borderColor: colors.primary }}>
+        <h2 className="font-bold uppercase tracking-wide text-sm" style={{ color: colors.primary }}>Order Compliance (Last 5 Days)</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-stone-50">
-              <th className="p-4 text-left font-bold uppercase text-xs opacity-50">Supplier</th>
-              {days.map(d => <th key={d.key} className="p-4 text-center font-bold min-w-[80px]">{d.label}</th>)}
+            <tr className="border-b" style={{ borderColor: colors.primary + '40' }}>
+              <th className="p-4 text-left font-bold uppercase text-xs" style={{ color: colors.textDark, opacity: 0.7 }}>Supplier</th>
+              {days.map(d => (
+                <th key={d.key} className="p-4 text-center font-bold min-w-[80px]" style={{ color: colors.textDark }}>{d.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {suppliers.map(s => (
-              <tr key={s.id} className="border-b last:border-0 hover:bg-stone-50">
-                <td className="p-4 font-bold font-serif text-lg" style={{ color: colors.primary }}>{s.name}</td>
+              <tr key={s.id} className="border-b last:border-0 hover:bg-white/50 transition-colors" style={{ borderColor: colors.primary + '20' }}>
+                <td className="p-4 font-bold" style={{ color: colors.textDark }}>{s.name}</td>
                 {days.map(d => {
                   const shouldOrder = s.days?.includes(d.dayName);
                   const isDone = history[d.key]?.[s.id];
-                  if (!shouldOrder) return <td key={d.key} className="text-center opacity-20">-</td>;
+
+                  if (!shouldOrder) return <td key={d.key} className="text-center" style={{ color: colors.textDark, opacity: 0.3 }}>-</td>;
+
                   return (
                     <td key={d.key} className="text-center">
-                      {isDone ? <CheckCircle2 className="w-6 h-6 mx-auto" style={{ color: colors.success }} /> : <Circle className="w-6 h-6 mx-auto opacity-30" style={{ color: colors.danger }} />}
+                      {isDone ? (
+                        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ backgroundColor: colors.success + '20', color: colors.success }}>
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center justify-center w-8 h-8 rounded-full" style={{ backgroundColor: colors.danger + '20', color: colors.danger }}>
+                          <Circle className="w-5 h-5" />
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -252,35 +307,209 @@ const HistoryView = ({ suppliers, history }) => {
   );
 };
 
+// === 3. ADMIN VIEW (FIXED FORM) ===
 const AdminView = ({ suppliers, onSave }) => {
   const [mode, setMode] = useState('list');
   const [formData, setFormData] = useState(null);
 
   const startEdit = (supplier) => {
-    setFormData(supplier ? { ...supplier } : { id: Date.now().toString(), name: '', days: [], items: [] });
+    setFormData(supplier ? { ...supplier } : {
+      id: Date.now().toString(),
+      name: '',
+      days: [],
+      items: []
+    });
     setMode('form');
   };
 
-  const handleDelete = (id) => { if (window.confirm("Delete this supplier?")) onSave(suppliers.filter(s => s.id !== id)); };
+  const handleDelete = (id) => {
+    if (window.confirm("Delete this supplier permanently?")) {
+      onSave(suppliers.filter(s => s.id !== id));
+    }
+  };
 
-  if (mode === 'form') return <SupplierForm initialData={formData} onSave={(data) => {
-    const isNew = !suppliers.find(s => s.id === data.id);
-    onSave(isNew ? [...suppliers, data] : suppliers.map(s => s.id === data.id ? data : s));
-    setMode('list');
-  }} onCancel={() => setMode('list')} />;
+  if (mode === 'form') {
+    return (
+      <SupplierForm
+        initialData={formData}
+        onSave={(data) => {
+          const isNew = !suppliers.find(s => s.id === data.id);
+          const newList = isNew
+            ? [...suppliers, data]
+            : suppliers.map(s => s.id === data.id ? data : s);
+
+          onSave(newList);
+          setMode('list');
+        }}
+        onCancel={() => setMode('list')}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="font-bold font-serif text-xl" style={{ color: colors.primary }}>Manage Suppliers</h2>
-        <button onClick={() => startEdit(null)} className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold shadow-lg text-sm uppercase tracking-wide active:scale-95 transition-all" 
-          style={{ backgroundColor: colors.primary, color: colors.accent }}>
-          <Plus className="w-4 h-4" /> Add New
+        <h2 className="font-bold" style={{ color: colors.textDark }}>Suppliers ({suppliers.length})</h2>
+        <button
+          onClick={() => startEdit(null)}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all"
+          style={{ backgroundColor: colors.primary, color: colors.secondary, boxShadow: `0 4px 6px -1px ${colors.primary}40` }}
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add New</span>
         </button>
       </div>
+
       <div className="grid gap-3">
         {suppliers.map(s => (
-          <div key={s.id} className="p-5 rounded-2xl shadow-sm border flex justify-between items-center bg-white" style={{ borderColor: '#E5E0D8' }}>
+          <div key={s.id} className="p-5 rounded-2xl shadow-sm border flex justify-between items-center group transition-colors"
+            style={{ backgroundColor: colors.secondary, borderColor: colors.primary }}
+          >
             <div>
-              <h3 className="font-bold text-lg font-serif" style={{ color: colors.textDark }}>{s.name}</h3>
-              <p className="text-xs font-bold uppercase tracking-wider opacity-50">{s.days?.length || 0} Days • {s.items?.length || 0} Products
+              <h3 className="font-bold text-lg" style={{ color: colors.textDark }}>{s.name}</h3>
+              <p className="text-xs font-medium uppercase tracking-wide mt-1" style={{ color: colors.textDark, opacity: 0.6 }}>
+                {s.days?.length || 0} Days • {s.items?.length || 0} Products
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => startEdit(s)} className="p-3 rounded-xl transition-all" style={{ color: colors.textDark, backgroundColor: colors.primary + '10' }}>
+                <Edit3 className="w-5 h-5" />
+              </button>
+              <button onClick={() => handleDelete(s.id)} className="p-3 rounded-xl transition-all" style={{ color: colors.danger, backgroundColor: colors.danger + '10' }}>
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const SupplierForm = ({ initialData, onSave, onCancel }) => {
+  const [data, setData] = useState(initialData);
+
+  const toggleDay = (day) => {
+    const currentDays = data.days || [];
+    const newDays = currentDays.includes(day)
+      ? currentDays.filter(d => d !== day)
+      : [...currentDays, day];
+    setData({ ...data, days: newDays });
+  };
+
+  const updateItem = (idx, field, val) => {
+    const newItems = [...(data.items || [])];
+    newItems[idx][field] = val;
+    setData({ ...data, items: newItems });
+  };
+
+  const addItem = () => {
+    setData({ ...data, items: [...(data.items || []), { id: Date.now(), name: '', par: '' }] });
+  };
+
+  const removeItem = (idx) => {
+    const newItems = [...(data.items || [])];
+    newItems.splice(idx, 1);
+    setData({ ...data, items: newItems });
+  };
+
+  return (
+    <div className="rounded-2xl shadow-xl border overflow-hidden animate-in slide-in-from-bottom-10" style={{ backgroundColor: colors.secondary, borderColor: colors.primary }}>
+      <div className="p-4 border-b flex justify-between items-center" style={{ backgroundColor: colors.primary + '10', borderColor: colors.primary + '40' }}>
+        <h3 className="font-bold" style={{ color: colors.primary }}>{initialData.name ? 'Edit Supplier' : 'New Supplier'}</h3>
+        <button onClick={onCancel} className="p-2 rounded-full hover:bg-white/50 transition-colors"><X className="w-5 h-5" style={{ color: colors.textDark, opacity: 0.6 }} /></button>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Name Input */}
+        <div>
+          <label className="block text-xs font-bold uppercase mb-2" style={{ color: colors.textDark, opacity: 0.6 }}>Supplier Name</label>
+          <input
+            className="w-full p-4 border-2 rounded-xl font-bold text-lg outline-none transition-all"
+            style={{ backgroundColor: colors.background, borderColor: colors.accent, color: colors.textDark }}
+            onFocus={(e) => e.target.style.borderColor = colors.primary}
+            onBlur={(e) => e.target.style.borderColor = colors.accent}
+            placeholder="e.g. Vintner's Best"
+            value={data.name}
+            onChange={e => setData({ ...data, name: e.target.value })}
+          />
+        </div>
+
+        {/* Days Selector */}
+        <div>
+          <label className="block text-xs font-bold uppercase mb-2" style={{ color: colors.textDark, opacity: 0.6 }}>Delivery Days</label>
+          <div className="flex flex-wrap gap-2">
+            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+              <button
+                key={day}
+                onClick={() => toggleDay(day)}
+                className={`px-3 py-2 rounded-lg text-xs font-bold uppercase transition-all shadow-sm`}
+                style={{
+                  backgroundColor: data.days?.includes(day) ? colors.primary : colors.background,
+                  color: data.days?.includes(day) ? colors.secondary : colors.textDark,
+                  opacity: data.days?.includes(day) ? 1 : 0.7
+                }}
+              >
+                {day.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Products List */}
+        <div>
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-xs font-bold uppercase" style={{ color: colors.textDark, opacity: 0.6 }}>Products</label>
+            <button onClick={addItem} className="text-xs font-bold uppercase hover:underline" style={{ color: colors.primary }}>+ Add Item</button>
+          </div>
+          <div className="space-y-3">
+            {(data.items || []).map((item, idx) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  className="flex-1 p-3 border rounded-xl text-sm font-semibold outline-none transition-all"
+                  style={{ backgroundColor: colors.background, borderColor: colors.accent, color: colors.textDark }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = colors.accent}
+                  placeholder="Item Name"
+                  value={item.name}
+                  onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                />
+                <input
+                  type="number"
+                  className="w-20 p-3 border rounded-xl text-sm font-semibold text-center outline-none transition-all"
+                  style={{ backgroundColor: colors.background, borderColor: colors.accent, color: colors.textDark }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = colors.accent}
+                  placeholder="Par"
+                  value={item.par}
+                  onChange={(e) => updateItem(idx, 'par', e.target.value)}
+                />
+                <button onClick={() => removeItem(idx)} className="p-3 rounded-xl transition-all" style={{ color: colors.danger, backgroundColor: colors.danger + '10' }}>
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+            {(data.items || []).length === 0 && (
+              <div className="text-center p-8 border-2 border-dashed rounded-xl text-sm" style={{ borderColor: colors.accent, color: colors.textDark, opacity: 0.6 }}>
+                No items yet. Click "+ Add Item" to start.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="pt-4 border-t flex gap-3" style={{ borderColor: colors.primary + '20' }}>
+          <button onClick={onCancel} className="flex-1 py-4 rounded-xl font-bold transition-colors" style={{ backgroundColor: colors.background, color: colors.textDark }}>
+            Cancel
+          </button>
+          <button onClick={() => onSave(data)} className="flex-1 py-4 rounded-xl font-bold shadow-xl transition-all active:scale-95" style={{ backgroundColor: colors.primary, color: colors.secondary }}>
+            <Save className="w-5 h-5 inline mr-2" />
+            Save Supplier
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CafeOrderingApp;
