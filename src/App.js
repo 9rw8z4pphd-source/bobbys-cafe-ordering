@@ -18,10 +18,11 @@ import {
   ClipboardCheck,
   ChevronUp,
   ChevronDown,
-  AlertCircle
+  AlertCircle,
+  Info
 } from 'lucide-react';
 
-// === FIREBASE CONFIG === (Kept same as your setup)
+// === FIREBASE CONFIG ===
 const firebaseConfig = {
   apiKey: "AIzaSyDL7h0nWWE4YV_IMXO7_gupvf1QUZamHGU",
   authDomain: "bobbys-cafe.firebaseapp.com",
@@ -145,12 +146,11 @@ const CafeOrderingApp = () => {
   );
 };
 
-// === UPDATED ORDERS VIEW WITH NON-SCHEDULED BUTTON ===
+// === ORDERS VIEW WITH DESCRIPTION DISPLAY ===
 const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
   const [showAllSuppliers, setShowAllSuppliers] = useState(false);
   const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
   
-  // Filter scheduled ones vs all
   const scheduledSuppliers = suppliers.filter(s => s.days?.includes(dayName));
   const activeSuppliers = showAllSuppliers ? suppliers : scheduledSuppliers;
 
@@ -165,9 +165,7 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
         <button 
           onClick={() => setShowAllSuppliers(!showAllSuppliers)}
           className={`w-full p-4 rounded-3xl border-2 border-dashed flex items-center justify-center gap-2 transition-all active:scale-95 ${
-            showAllSuppliers 
-            ? 'bg-amber-50 border-amber-300 text-amber-700' 
-            : 'bg-stone-50 border-stone-200 text-stone-400'
+            showAllSuppliers ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-stone-50 border-stone-200 text-stone-400'
           }`}
         >
           {showAllSuppliers ? <X size={16}/> : <AlertCircle size={16} />}
@@ -177,12 +175,6 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
         </button>
       </div>
 
-      {activeSuppliers.length === 0 && (
-        <div className="text-center py-20 opacity-30 italic font-serif text-stone-500">
-          No scheduled counts for today.<br/>Use the button above for emergency orders.
-        </div>
-      )}
-
       {activeSuppliers.map(s => {
         const isCompleted = history[todayKey]?.[s.id];
         const isNotScheduledToday = !s.days?.includes(dayName);
@@ -191,28 +183,31 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
           <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6 transition-all relative overflow-hidden" 
                style={{ borderColor: isCompleted ? colors.success : (isNotScheduledToday ? colors.accent : colors.primary) }}>
             
-            {isNotScheduledToday && (
-                <div className="absolute top-0 right-10 bg-amber-100 px-3 py-1 rounded-b-xl text-[8px] font-black text-amber-700 tracking-tighter uppercase">
-                    Non-Scheduled
-                </div>
-            )}
-
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
+                {s.description && (
+                  <div className="flex items-start gap-2 mt-2 max-w-[200px]">
+                    <Info size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-stone-400 leading-tight uppercase tracking-tight">{s.description}</p>
+                  </div>
+                )}
+              </div>
               <button onClick={() => {
                 const newHistory = { ...history };
                 if (!newHistory[todayKey]) newHistory[todayKey] = {};
                 newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
                 onSave('history', newHistory);
-              }} className="p-4 rounded-full shadow-lg transition-transform active:scale-90" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
+              }} className="p-4 rounded-full shadow-lg" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
                 <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
               </button>
             </div>
+
             <div className="space-y-3">
               {s.items?.map(item => (
                 <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
                   <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
-                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
+                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
                     const newQ = { ...quantities };
                     if (!newQ[todayKey]) newQ[todayKey] = {};
                     if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
@@ -229,7 +224,91 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
   );
 };
 
-// ... HistoryView, AdminView, SupplierForm, PinPad, NavButton remain identical to previous ...
+// === ADMIN VIEW & FORM WITH DESCRIPTION INPUT ===
+const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
+    const [mode, setMode] = useState('list');
+    const [formData, setFormData] = useState(null);
+    if (mode === 'form') return <SupplierForm initialData={formData} onSave={(data) => {
+        const newList = !suppliers.find(s => s.id === data.id) ? [...suppliers, data] : suppliers.map(s => s.id === data.id ? data : s);
+        onSave(newList); setMode('list');
+    }} onCancel={() => setMode('list')} />;
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center px-4 mb-4">
+                <h2 className="font-serif text-2xl">Admin Control</h2>
+                <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase">Lock</button>
+            </div>
+            <button onClick={onReset} className="w-full p-4 rounded-3xl bg-red-50 text-red-700 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border border-red-100 mb-8"><RefreshCw size={14} /> Clear Today's Counts</button>
+            {suppliers.map(s => (
+                <div key={s.id} className="p-6 rounded-[30px] bg-white flex justify-between items-center shadow-lg mb-2">
+                    <span className="font-serif text-lg">{s.name}</span>
+                    <div className="flex gap-2">
+                        <button onClick={() => { setFormData(s); setMode('form'); }} className="p-3 bg-stone-50 rounded-full text-stone-400"><Edit3 size={18} /></button>
+                        <button onClick={() => window.confirm("Delete?") && onSave(suppliers.filter(x => x.id !== s.id))} className="p-3 bg-stone-50 rounded-full text-red-200"><Trash2 size={18} /></button>
+                    </div>
+                </div>
+            ))}
+            <button onClick={() => { setFormData({ id: Date.now().toString(), name: '', description: '', days: [], items: [] }); setMode('form'); }} className="w-full p-6 rounded-[30px] border-4 border-dashed border-stone-200 text-stone-300 flex justify-center hover:bg-white transition-all"><Plus size={32} /></button>
+        </div>
+    );
+};
+
+const SupplierForm = ({ initialData, onSave, onCancel }) => {
+    const [data, setData] = useState(initialData);
+    const moveItem = (index, direction) => {
+        const newItems = [...data.items];
+        const targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= newItems.length) return;
+        const temp = newItems[index];
+        newItems[index] = newItems[targetIndex];
+        newItems[targetIndex] = temp;
+        setData({ ...data, items: newItems });
+    };
+    return (
+      <div className="bg-white rounded-[40px] shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-8"><h3 className="font-serif text-2xl">Supplier Profile</h3><X onClick={onCancel} className="w-6 h-6 text-stone-300 cursor-pointer" /></div>
+        
+        <label className="text-[10px] font-black uppercase text-stone-400 px-2">Supplier Name</label>
+        <input className="w-full p-4 rounded-2xl bg-stone-50 text-xl mb-4 outline-none border-2 border-transparent focus:border-amber-200 font-serif" placeholder="e.g. Brasserie Bread" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+        
+        <label className="text-[10px] font-black uppercase text-stone-400 px-2">Order Info (Cutoff/Method/Delivery Days)</label>
+        <textarea className="w-full p-4 rounded-2xl bg-stone-50 text-xs font-bold mb-6 outline-none border-2 border-transparent focus:border-amber-200 min-h-[80px]" placeholder="e.g. Cutoff 2pm via App. Delivered Mon/Wed/Fri." value={data.description} onChange={e => setData({...data, description: e.target.value})} />
+
+        <label className="text-[10px] font-black uppercase text-stone-400 px-2">Scheduled Count Days</label>
+        <div className="flex flex-wrap gap-2 mb-8 mt-2">
+          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
+            <button key={day} onClick={() => {
+              const days = data.days?.includes(day) ? data.days.filter(d => d !== day) : [...(data.days || []), day];
+              setData({...data, days});
+            }} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${data.days?.includes(day) ? 'bg-stone-800 text-white border-stone-800' : 'bg-white text-stone-300 border-stone-200'}`}>{day.slice(0,3)}</button>
+          ))}
+        </div>
+        
+        <div className="space-y-3 mb-8">
+          <p className="text-[10px] font-black uppercase text-stone-400 px-2 mb-2">Items</p>
+          {data.items?.map((item, i) => (
+            <div key={item.id} className="flex gap-2 items-center">
+              <div className="flex flex-col gap-1">
+                <button onClick={() => moveItem(i, -1)} disabled={i === 0} className={`p-1 rounded bg-stone-50 ${i === 0 ? 'opacity-20' : 'text-stone-400'}`}><ChevronUp size={14} /></button>
+                <button onClick={() => moveItem(i, 1)} disabled={i === data.items.length - 1} className={`p-1 rounded bg-stone-50 ${i === data.items.length - 1 ? 'opacity-20' : 'text-stone-400'}`}><ChevronDown size={14} /></button>
+              </div>
+              <input className="flex-1 p-4 rounded-2xl bg-stone-50 text-xs font-bold outline-none border-2 border-transparent focus:border-amber-100" placeholder="Item" value={item.name} onChange={e => {
+                const items = [...data.items]; items[i].name = e.target.value; setData({...data, items});
+              }} />
+              <input className="w-16 p-4 rounded-2xl bg-stone-50 text-xs text-center font-bold outline-none" placeholder="Par" value={item.par} onChange={e => {
+                const items = [...data.items]; items[i].par = e.target.value; setData({...data, items});
+              }} />
+              <button onClick={() => { const items = [...data.items]; items.splice(i,1); setData({...data, items}); }} className="p-2 text-red-200">×</button>
+            </div>
+          ))}
+          <button onClick={() => setData({...data, items: [...(data.items || []), { id: Date.now(), name: '', par: '' }]})} className="text-xs font-black uppercase tracking-widest text-amber-600 mt-2">+ Add Product</button>
+        </div>
+        <button onClick={() => onSave(data)} className="w-full py-5 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95">Save Supplier</button>
+      </div>
+    );
+};
+
+// ... HistoryView, PinPad, NavButton remain same ...
 const HistoryView = ({ suppliers, history, quantities }) => {
   const complianceDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + (i - 3));
@@ -306,81 +385,6 @@ const PinPad = ({ pinInput, setPinInput, onAuth }) => {
             }} className="w-20 h-20 rounded-full bg-white shadow-xl text-2xl font-bold active:scale-90 transition-transform">{btn}</button>
           ))}
         </div>
-      </div>
-    );
-};
-
-const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
-    const [mode, setMode] = useState('list');
-    const [formData, setFormData] = useState(null);
-    if (mode === 'form') return <SupplierForm initialData={formData} onSave={(data) => {
-        const newList = !suppliers.find(s => s.id === data.id) ? [...suppliers, data] : suppliers.map(s => s.id === data.id ? data : s);
-        onSave(newList); setMode('list');
-    }} onCancel={() => setMode('list')} />;
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center px-4 mb-4">
-                <h2 className="font-serif text-2xl">Admin Control</h2>
-                <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase">Lock</button>
-            </div>
-            <button onClick={onReset} className="w-full p-4 rounded-3xl bg-red-50 text-red-700 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border border-red-100 mb-8"><RefreshCw size={14} /> Clear Today's Counts</button>
-            {suppliers.map(s => (
-                <div key={s.id} className="p-6 rounded-[30px] bg-white flex justify-between items-center shadow-lg mb-2">
-                    <span className="font-serif text-lg">{s.name}</span>
-                    <div className="flex gap-2">
-                        <button onClick={() => { setFormData(s); setMode('form'); }} className="p-3 bg-stone-50 rounded-full text-stone-400"><Edit3 size={18} /></button>
-                        <button onClick={() => window.confirm("Delete?") && onSave(suppliers.filter(x => x.id !== s.id))} className="p-3 bg-stone-50 rounded-full text-red-200"><Trash2 size={18} /></button>
-                    </div>
-                </div>
-            ))}
-            <button onClick={() => { setFormData({ id: Date.now().toString(), name: '', days: [], items: [] }); setMode('form'); }} className="w-full p-6 rounded-[30px] border-4 border-dashed border-stone-200 text-stone-300 flex justify-center hover:bg-white transition-all"><Plus size={32} /></button>
-        </div>
-    );
-};
-
-const SupplierForm = ({ initialData, onSave, onCancel }) => {
-    const [data, setData] = useState(initialData);
-    const moveItem = (index, direction) => {
-        const newItems = [...data.items];
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= newItems.length) return;
-        const temp = newItems[index];
-        newItems[index] = newItems[targetIndex];
-        newItems[targetIndex] = temp;
-        setData({ ...data, items: newItems });
-    };
-    return (
-      <div className="bg-white rounded-[40px] shadow-2xl p-8">
-        <div className="flex justify-between items-center mb-8"><h3 className="font-serif text-2xl">Supplier Profile</h3><X onClick={onCancel} className="w-6 h-6 text-stone-300 cursor-pointer" /></div>
-        <input className="w-full p-5 rounded-3xl bg-stone-50 text-xl mb-6 outline-none border-2 border-transparent focus:border-amber-200 font-serif" placeholder="Supplier Name" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
-        <div className="flex flex-wrap gap-2 mb-8">
-          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-            <button key={day} onClick={() => {
-              const days = data.days?.includes(day) ? data.days.filter(d => d !== day) : [...(data.days || []), day];
-              setData({...data, days});
-            }} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${data.days?.includes(day) ? 'bg-stone-800 text-white border-stone-800' : 'bg-white text-stone-300 border-stone-200'}`}>{day.slice(0,3)}</button>
-          ))}
-        </div>
-        <div className="space-y-3 mb-8">
-          <p className="text-[10px] font-black uppercase text-stone-400 px-2 mb-2">Items & Order</p>
-          {data.items?.map((item, i) => (
-            <div key={item.id} className="flex gap-2 items-center">
-              <div className="flex flex-col gap-1">
-                <button onClick={() => moveItem(i, -1)} disabled={i === 0} className={`p-1 rounded bg-stone-50 ${i === 0 ? 'opacity-20' : 'text-stone-400'}`}><ChevronUp size={14} /></button>
-                <button onClick={() => moveItem(i, 1)} disabled={i === data.items.length - 1} className={`p-1 rounded bg-stone-50 ${i === data.items.length - 1 ? 'opacity-20' : 'text-stone-400'}`}><ChevronDown size={14} /></button>
-              </div>
-              <input className="flex-1 p-4 rounded-2xl bg-stone-50 text-xs font-bold outline-none border-2 border-transparent focus:border-amber-100" placeholder="Item" value={item.name} onChange={e => {
-                const items = [...data.items]; items[i].name = e.target.value; setData({...data, items});
-              }} />
-              <input className="w-16 p-4 rounded-2xl bg-stone-50 text-xs text-center font-bold outline-none" placeholder="Par" value={item.par} onChange={e => {
-                const items = [...data.items]; items[i].par = e.target.value; setData({...data, items});
-              }} />
-              <button onClick={() => { const items = [...data.items]; items.splice(i,1); setData({...data, items}); }} className="p-2 text-red-200">×</button>
-            </div>
-          ))}
-          <button onClick={() => setData({...data, items: [...(data.items || []), { id: Date.now(), name: '', par: '' }]})} className="text-xs font-black uppercase tracking-widest text-amber-600 mt-2">+ Add Product</button>
-        </div>
-        <button onClick={() => onSave(data)} className="w-full py-5 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest shadow-2xl active:scale-95">Save Supplier</button>
       </div>
     );
 };
