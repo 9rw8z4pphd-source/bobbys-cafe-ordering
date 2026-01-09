@@ -6,7 +6,6 @@ import {
   History,
   Settings,
   Wine,
-  Lock,
   Plus,
   Edit3,
   Trash2,
@@ -15,9 +14,9 @@ import {
   CheckCircle2,
   User,
   Calendar,
-  Send,
   LogOut,
-  FileText
+  RefreshCw,
+  ClipboardCheck
 } from 'lucide-react';
 
 // === FIREBASE CONFIG ===
@@ -56,6 +55,8 @@ const CafeOrderingApp = () => {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [pinInput, setPinInput] = useState("");
 
+  const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+
   useEffect(() => {
     const dataRef = ref(db, 'cafe_data');
     return onValue(dataRef, (snapshot) => {
@@ -69,6 +70,17 @@ const CafeOrderingApp = () => {
 
   const saveToFirebase = (path, data) => set(ref(db, `cafe_data/${path}`), data);
 
+  const resetToday = () => {
+    if (window.confirm("Reset Today? This will clear all counts and checks for the current shift.")) {
+        const newQuantities = { ...orderQuantities };
+        const newHistory = { ...orderHistory };
+        delete newQuantities[todayKey];
+        delete newHistory[todayKey];
+        saveToFirebase('quantities', newQuantities);
+        saveToFirebase('history', newHistory);
+    }
+  };
+
   const handleLogin = (e) => {
     e.preventDefault();
     if (staffName.trim()) {
@@ -77,29 +89,17 @@ const CafeOrderingApp = () => {
     }
   };
 
-  const handleLogoutStaff = () => {
-    localStorage.removeItem('staffName');
-    setStaffName('');
-    setIsLoggedIn(false);
-  };
-
   if (loading) return <div className="h-screen flex items-center justify-center" style={{ backgroundColor: colors.background }}><Loader2 className="animate-spin text-stone-400" /></div>;
 
   if (!isLoggedIn) {
     return (
       <div className="h-screen flex items-center justify-center p-6" style={{ backgroundColor: colors.background }}>
-        <form onSubmit={handleLogin} className="w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl text-center border-t-8" style={{ borderColor: colors.primary }}>
+        <form onSubmit={handleLogin} className="w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl text-center border-t-8 border-primary" style={{ borderColor: colors.primary }}>
           <div className="bg-stone-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Wine className="text-stone-400" /></div>
           <h1 className="font-serif text-2xl mb-2">Bobby's</h1>
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-8">Who is on shift?</p>
-          <input 
-            autoFocus
-            className="w-full p-4 rounded-2xl bg-stone-50 mb-4 outline-none text-center font-bold border-2 border-transparent focus:border-amber-200"
-            placeholder="Enter Your Name"
-            value={staffName}
-            onChange={(e) => setStaffName(e.target.value)}
-          />
-          <button type="submit" className="w-full py-4 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest shadow-xl">Start Shift</button>
+          <p className="text-xs font-bold uppercase tracking-widest text-stone-400 mb-8">Shift Entry</p>
+          <input autoFocus className="w-full p-4 rounded-2xl bg-stone-50 mb-4 outline-none text-center font-bold border-2 border-transparent focus:border-amber-200" placeholder="Your Name" value={staffName} onChange={(e) => setStaffName(e.target.value)} />
+          <button type="submit" className="w-full py-4 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest shadow-xl">Sign In</button>
         </form>
       </div>
     );
@@ -116,20 +116,18 @@ const CafeOrderingApp = () => {
                 <span className="text-[10px] font-bold tracking-widest text-white/60 uppercase">{staffName}</span>
             </div>
           </div>
-          <button onClick={handleLogoutStaff} className="bg-white/10 p-2 rounded-full hover:bg-white/20">
-            <LogOut size={18} className="text-white" />
-          </button>
+          <button onClick={() => { localStorage.removeItem('staffName'); setIsLoggedIn(false); }} className="bg-white/10 p-2 rounded-full"><LogOut size={18} className="text-white" /></button>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto p-4">
-        {view === 'orders' && <OrdersView staffName={staffName} suppliers={suppliers} history={orderHistory} quantities={orderQuantities} onSave={saveToFirebase} />}
+        {view === 'orders' && <OrdersView staffName={staffName} todayKey={todayKey} suppliers={suppliers} history={orderHistory} quantities={orderQuantities} onSave={saveToFirebase} />}
         {view === 'history' && <HistoryView suppliers={suppliers} history={orderHistory} quantities={orderQuantities} />}
         {view === 'admin' && (
           !isAdminAuthenticated ? (
             <PinPad pinInput={pinInput} setPinInput={setPinInput} onAuth={() => setIsAdminAuthenticated(true)} />
           ) : (
-            <AdminView suppliers={suppliers} onSave={(newList) => saveToFirebase('suppliers', newList)} onLogout={() => setIsAdminAuthenticated(false)} />
+            <AdminView suppliers={suppliers} onSave={(newList) => saveToFirebase('suppliers', newList)} onLogout={() => setIsAdminAuthenticated(false)} onReset={resetToday} />
           )
         )}
       </main>
@@ -145,67 +143,29 @@ const CafeOrderingApp = () => {
   );
 };
 
-const NavButton = ({ icon: Icon, active, onClick }) => (
-  <button onClick={onClick} className={`p-4 rounded-full transition-all duration-500 ${active ? 'shadow-inner' : ''}`}
-          style={{ backgroundColor: active ? colors.primary : 'transparent', color: active ? '#fff' : colors.primary }}>
-    <Icon className="w-6 h-6" />
-  </button>
-);
-
-const OrdersView = ({ staffName, suppliers, history, quantities, onSave }) => {
-  const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
   const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
   const todaysSuppliers = suppliers.filter(s => s.days?.includes(dayName));
 
-  const sendDailySummary = () => {
-    let summary = `*BOBBY'S DAILY SUMMARY*\nDate: ${new Date().toLocaleDateString()}\nStaff: ${staffName}\n\n`;
-    
-    todaysSuppliers.forEach(s => {
-      summary += `*${s.name.toUpperCase()}*\n`;
-      s.items.forEach(item => {
-        const qty = quantities[todayKey]?.[s.id]?.[item.id] || '0';
-        summary += `• ${item.name}: ${qty}\n`;
-      });
-      summary += `\n`;
-    });
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(summary)}`, '_blank');
-  };
-
-  const shareIndividual = (supplier) => {
-    const items = supplier.items.map(item => {
-      const qty = quantities[todayKey]?.[supplier.id]?.[item.id] || '0';
-      return `• ${item.name}: ${qty}`;
-    }).join('\n');
-    const msg = `*ORDER: ${supplier.name.toUpperCase()}*\n${items}\n\n*By: ${staffName}*`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-
   return (
     <div className="space-y-6">
-      {todaysSuppliers.length > 0 && (
-        <button onClick={sendDailySummary} className="w-full p-4 rounded-3xl bg-amber-100 text-amber-900 font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-2 shadow-sm border border-amber-200 active:scale-95 transition-all">
-          <FileText size={16} /> Send All Counts to Manager
-        </button>
-      )}
+      <div className="bg-white/40 p-4 rounded-3xl flex items-center justify-center gap-3 border border-stone-200">
+        <ClipboardCheck className="text-stone-400" size={16} />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Live Recording Mode</span>
+      </div>
 
       {todaysSuppliers.map(s => {
         const isCompleted = history[todayKey]?.[s.id];
         return (
           <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6 transition-all" style={{ borderColor: isCompleted ? colors.success : colors.primary }}>
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
-                <button onClick={() => shareIndividual(s)} className="mt-2 flex items-center gap-2 px-4 py-2 rounded-full bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest active:scale-95">
-                  <Send size={10} /> Send to Supplier
-                </button>
-              </div>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif text-stone-800">{s.name}</h3>
               <button onClick={() => {
                 const newHistory = { ...history };
                 if (!newHistory[todayKey]) newHistory[todayKey] = {};
                 newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
                 onSave('history', newHistory);
-              }} className="p-4 rounded-full shadow-lg" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
+              }} className="p-4 rounded-full shadow-lg transition-transform active:scale-90" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
                 <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
               </button>
             </div>
@@ -213,16 +173,13 @@ const OrdersView = ({ staffName, suppliers, history, quantities, onSave }) => {
               {s.items?.map(item => (
                 <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100">
                   <span className="font-bold text-xs text-stone-500 uppercase">{item.name}</span>
-                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500"
-                    value={quantities[todayKey]?.[s.id]?.[item.id] || ''} 
-                    onChange={(e) => {
-                      const newQ = { ...quantities };
-                      if (!newQ[todayKey]) newQ[todayKey] = {};
-                      if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
-                      newQ[todayKey][s.id][item.id] = e.target.value;
-                      onSave('quantities', newQ);
-                    }} 
-                  />
+                  <input type="number" className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" value={quantities[todayKey]?.[s.id]?.[item.id] || ''} onChange={(e) => {
+                    const newQ = { ...quantities };
+                    if (!newQ[todayKey]) newQ[todayKey] = {};
+                    if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
+                    newQ[todayKey][s.id][item.id] = e.target.value;
+                    onSave('quantities', newQ);
+                  }} />
                 </div>
               ))}
             </div>
@@ -233,60 +190,52 @@ const OrdersView = ({ staffName, suppliers, history, quantities, onSave }) => {
   );
 };
 
-// ... HistoryView, PinPad, AdminView, SupplierForm remain the same as previous update ...
 const HistoryView = ({ suppliers, history, quantities }) => {
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }) };
+  const complianceDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + (i - 3));
+    return { key: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, label: d.toLocaleDateString('en-US', { weekday: 'short' }), isToday: i === 3 };
   });
 
   return (
     <div className="space-y-6">
       <div className="rounded-[30px] bg-white p-6 shadow-xl text-center">
-        <h2 className="font-serif text-lg mb-4">Shift Compliance</h2>
+        <h2 className="font-serif text-lg mb-4 italic text-stone-600">Compliance Tracking</h2>
         <div className="flex justify-between px-2">
-          {days.slice().reverse().map(d => {
+          {complianceDays.map(d => {
             const completedCount = Object.values(history[d.key] || {}).filter(v => v?.done).length;
             return (
               <div key={d.key} className="flex flex-col items-center gap-2">
-                <div className="w-8 h-20 bg-stone-100 rounded-full relative overflow-hidden">
+                <div className={`w-8 h-20 rounded-full relative overflow-hidden ${d.isToday ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`} style={{ backgroundColor: '#F0F0F0' }}>
                   <div className="absolute bottom-0 w-full rounded-full transition-all duration-700" style={{ height: `${completedCount * 33}%`, backgroundColor: colors.primary }}></div>
                 </div>
-                <span className="text-[10px] font-bold text-stone-400">{d.label}</span>
+                <span className={`text-[9px] font-black uppercase ${d.isToday ? 'text-amber-600' : 'text-stone-400'}`}>{d.label}</span>
               </div>
             );
           })}
         </div>
       </div>
-
+      
       <div className="space-y-4">
-        {days.map(d => {
+        {[...complianceDays].reverse().map(d => {
             const dayData = quantities[d.key];
             const dayMeta = history[d.key];
             if (!dayData) return null;
             return (
                 <div key={d.key} className="p-6 rounded-[30px] bg-white/60 border border-stone-200">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2"><Calendar size={14} className="text-stone-400"/><span className="font-black text-[10px] uppercase tracking-widest">{d.label}</span></div>
-                    </div>
-                    {Object.entries(dayData).map(([sId, items]) => {
-                        const sName = suppliers.find(s => s.id === sId)?.name || 'Supplier';
-                        const worker = dayMeta?.[sId]?.by || 'Unknown';
-                        return (
-                            <div key={sId} className="mb-4 last:mb-0">
-                                <div className="flex justify-between items-center mb-2">
-                                    <p className="text-[10px] font-black text-amber-600 uppercase">{sName}</p>
-                                    <span className="text-[9px] bg-white px-2 py-1 rounded-full border text-stone-400">By: {worker}</span>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {Object.entries(items).map(([itemId, qty]) => {
-                                        const itemName = suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name || 'Item';
-                                        return <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm">{itemName}: {qty}</span>
-                                    })}
-                                </div>
+                    <p className="font-black text-[10px] uppercase text-stone-400 mb-4 tracking-widest">{d.label} History</p>
+                    {Object.entries(dayData).map(([sId, items]) => (
+                        <div key={sId} className="mb-4 last:mb-0">
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-[10px] font-black text-amber-600 uppercase">{suppliers.find(s => s.id === sId)?.name}</p>
+                                <span className="text-[9px] bg-white px-2 py-1 rounded-full border text-stone-400 font-bold">BY: {dayMeta?.[sId]?.by || 'System'}</span>
                             </div>
-                        );
-                    })}
+                            <div className="flex flex-wrap gap-2">
+                                {Object.entries(items).map(([itemId, qty]) => (
+                                    <span key={itemId} className="px-3 py-1 bg-white rounded-full text-[10px] font-bold shadow-sm border border-stone-100">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === itemId)?.name}: {qty}</span>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             );
         })}
@@ -294,6 +243,14 @@ const HistoryView = ({ suppliers, history, quantities }) => {
     </div>
   );
 };
+
+// ... NavButton, AdminView, SupplierForm, PinPad components stay as before, just minus share logic ...
+const NavButton = ({ icon: Icon, active, onClick }) => (
+    <button onClick={onClick} className={`p-4 rounded-full transition-all duration-500 ${active ? 'shadow-inner' : ''}`}
+            style={{ backgroundColor: active ? colors.primary : 'transparent', color: active ? '#fff' : colors.primary }}>
+      <Icon className="w-6 h-6" />
+    </button>
+);
 
 const PinPad = ({ pinInput, setPinInput, onAuth }) => {
     const handleDigit = (d) => {
@@ -323,30 +280,31 @@ const PinPad = ({ pinInput, setPinInput, onAuth }) => {
     );
 };
 
-const AdminView = ({ suppliers, onSave, onLogout }) => {
+const AdminView = ({ suppliers, onSave, onLogout, onReset }) => {
     const [mode, setMode] = useState('list');
     const [formData, setFormData] = useState(null);
     if (mode === 'form') return <SupplierForm initialData={formData} onSave={(data) => {
-      const newList = !suppliers.find(s => s.id === data.id) ? [...suppliers, data] : suppliers.map(s => s.id === data.id ? data : s);
-      onSave(newList); setMode('list');
+        const newList = !suppliers.find(s => s.id === data.id) ? [...suppliers, data] : suppliers.map(s => s.id === data.id ? data : s);
+        onSave(newList); setMode('list');
     }} onCancel={() => setMode('list')} />;
     return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center px-2">
-            <h2 className="font-serif text-xl">Suppliers List</h2>
-            <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase">Lock Admin</button>
-        </div>
-        {suppliers.map(s => (
-          <div key={s.id} className="p-6 rounded-[30px] bg-white flex justify-between items-center shadow-lg">
-            <span className="font-serif text-lg">{s.name}</span>
-            <div className="flex gap-2">
-              <button onClick={() => { setFormData(s); setMode('form'); }} className="p-3 bg-stone-50 rounded-full text-stone-400"><Edit3 size={18} /></button>
-              <button onClick={() => window.confirm("Delete?") && onSave(suppliers.filter(x => x.id !== s.id))} className="p-3 bg-stone-50 rounded-full text-red-300"><Trash2 size={18} /></button>
+        <div className="space-y-4">
+            <div className="flex justify-between items-center px-4 mb-4">
+                <h2 className="font-serif text-2xl">Admin Control</h2>
+                <button onClick={onLogout} className="text-xs font-bold text-red-500 uppercase tracking-widest">Lock</button>
             </div>
-          </div>
-        ))}
-        <button onClick={() => { setFormData({ id: Date.now().toString(), name: '', days: [], items: [] }); setMode('form'); }} className="w-full p-6 rounded-[30px] border-4 border-dashed border-stone-200 text-stone-300 flex justify-center hover:bg-white transition-all"><Plus size={32} /></button>
-      </div>
+            <button onClick={onReset} className="w-full p-4 rounded-3xl bg-red-50 text-red-700 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 border border-red-100 mb-8"><RefreshCw size={14} /> Clear Today's Counts</button>
+            {suppliers.map(s => (
+                <div key={s.id} className="p-6 rounded-[30px] bg-white flex justify-between items-center shadow-lg mb-2">
+                    <span className="font-serif text-lg">{s.name}</span>
+                    <div className="flex gap-2">
+                        <button onClick={() => { setFormData(s); setMode('form'); }} className="p-3 bg-stone-50 rounded-full text-stone-400"><Edit3 size={18} /></button>
+                        <button onClick={() => window.confirm("Delete?") && onSave(suppliers.filter(x => x.id !== s.id))} className="p-3 bg-stone-50 rounded-full text-red-200"><Trash2 size={18} /></button>
+                    </div>
+                </div>
+            ))}
+            <button onClick={() => { setFormData({ id: Date.now().toString(), name: '', days: [], items: [] }); setMode('form'); }} className="w-full p-6 rounded-[30px] border-4 border-dashed border-stone-200 text-stone-300 flex justify-center hover:bg-white transition-all"><Plus size={32} /></button>
+        </div>
     );
 };
 
@@ -355,7 +313,7 @@ const SupplierForm = ({ initialData, onSave, onCancel }) => {
     return (
       <div className="bg-white rounded-[40px] shadow-2xl p-8">
         <div className="flex justify-between items-center mb-8"><h3 className="font-serif text-2xl">Supplier Profile</h3><X onClick={onCancel} className="w-6 h-6 text-stone-300 cursor-pointer" /></div>
-        <input className="w-full p-5 rounded-3xl bg-stone-50 text-xl mb-6 outline-none border-2 border-transparent focus:border-amber-200" placeholder="Name" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
+        <input className="w-full p-5 rounded-3xl bg-stone-50 text-xl mb-6 outline-none border-2 border-transparent focus:border-amber-200 font-serif" placeholder="Name" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
         <div className="flex flex-wrap gap-2 mb-8">
           {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
             <button key={day} onClick={() => {
