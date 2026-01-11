@@ -20,7 +20,8 @@ import {
   ChevronDown,
   AlertCircle,
   Info,
-  Target
+  Target,
+  ListFilter
 } from 'lucide-react';
 
 // === FIREBASE CONFIG ===
@@ -162,13 +163,15 @@ const ParInfoOverlay = ({ item, onClose }) => (
   </div>
 );
 
-const InventoryRow = ({ item, supplierId, todayKey, quantities, onSave }) => {
+const InventoryRow = ({ item, supplierId, todayKey, quantities, onSave, isCompleted }) => {
   const [showOverlay, setShowOverlay] = useState(false);
   const timerRef = useRef(null);
+  const currentQty = quantities[todayKey]?.[supplierId]?.[item.id] || '';
 
-  const startHold = () => {
-    timerRef.current = setTimeout(() => setShowOverlay(true), 600);
-  };
+  // Filter: If completed and qty is 0/empty, hide this row
+  if (isCompleted && (!currentQty || currentQty === '0')) return null;
+
+  const startHold = () => { timerRef.current = setTimeout(() => setShowOverlay(true), 600); };
   const endHold = () => clearTimeout(timerRef.current);
 
   return (
@@ -176,27 +179,35 @@ const InventoryRow = ({ item, supplierId, todayKey, quantities, onSave }) => {
       <div 
         onMouseDown={startHold} onMouseUp={endHold} onMouseLeave={endHold}
         onTouchStart={startHold} onTouchEnd={endHold}
-        className="flex items-center justify-between p-4 rounded-3xl bg-stone-50 border border-stone-100 active:bg-stone-100 transition-colors"
+        className={`flex items-center justify-between p-4 rounded-3xl transition-all duration-300 ${
+            isCompleted ? 'bg-white border-2 border-stone-100' : 'bg-stone-50 border border-stone-100'
+        }`}
       >
         <div className="flex flex-col">
           <span className="font-bold text-xs text-stone-600 uppercase tracking-tight">{item.name}</span>
-          <span className="text-[9px] font-black text-amber-600/60 uppercase mt-0.5">PAR: {item.par || '-'}</span>
+          {!isCompleted && <span className="text-[9px] font-black text-amber-600/60 uppercase mt-0.5">PAR: {item.par || '-'}</span>}
         </div>
         
         <div className="flex items-center gap-3">
-            <input 
-              type="number" 
-              placeholder="0"
-              className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" 
-              value={quantities[todayKey]?.[supplierId]?.[item.id] || ''} 
-              onChange={(e) => {
-                const newQ = { ...quantities };
-                if (!newQ[todayKey]) newQ[todayKey] = {};
-                if (!newQ[todayKey][supplierId]) newQ[todayKey][supplierId] = {};
-                newQ[todayKey][supplierId][item.id] = e.target.value;
-                onSave('quantities', newQ);
-              }} 
-            />
+            {isCompleted ? (
+                <div className="bg-stone-900 text-white w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg">
+                    {currentQty}
+                </div>
+            ) : (
+                <input 
+                  type="number" 
+                  placeholder="0"
+                  className="w-20 p-3 rounded-full border-none bg-white shadow-inner text-center font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500" 
+                  value={currentQty} 
+                  onChange={(e) => {
+                    const newQ = { ...quantities };
+                    if (!newQ[todayKey]) newQ[todayKey] = {};
+                    if (!newQ[todayKey][supplierId]) newQ[todayKey][supplierId] = {};
+                    newQ[todayKey][supplierId][item.id] = e.target.value;
+                    onSave('quantities', newQ);
+                  }} 
+                />
+            )}
         </div>
       </div>
       {showOverlay && <ParInfoOverlay item={item} onClose={() => setShowOverlay(false)} />}
@@ -235,15 +246,41 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
       {activeSuppliers.map(s => {
         const isCompleted = history[todayKey]?.[s.id];
         const isNotScheduledToday = !s.days?.includes(dayName);
+        
+        // Count how many items actually have an order quantity
+        const orderedItemsCount = s.items?.filter(item => {
+            const qty = quantities[todayKey]?.[s.id]?.[item.id];
+            return qty && qty !== '0';
+        }).length;
+
+        // If completed and nothing was ordered, we can hide the whole card or show a small summary
+        if (isCompleted && orderedItemsCount === 0) {
+            return (
+                <div key={s.id} className="p-4 rounded-3xl bg-stone-100/50 flex justify-between items-center border border-dashed border-stone-200 opacity-60">
+                    <span className="font-serif text-stone-500">{s.name} (Zero Order)</span>
+                    <button onClick={() => {
+                        const newHistory = { ...history };
+                        newHistory[todayKey][s.id] = null;
+                        onSave('history', newHistory);
+                    }} className="text-[9px] font-black uppercase text-primary">Re-open</button>
+                </div>
+            );
+        }
 
         return (
           <div key={s.id} className="rounded-[40px] shadow-xl border-t-8 bg-white p-6 transition-all relative overflow-hidden" 
                style={{ borderColor: isCompleted ? colors.success : (isNotScheduledToday ? colors.accent : colors.primary) }}>
             
+            {isCompleted && (
+                <div className="absolute top-0 right-16 bg-green-500 px-4 py-1 rounded-b-xl text-[9px] font-black text-white uppercase flex items-center gap-1">
+                    <ListFilter size={10} /> Summary View
+                </div>
+            )}
+
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1 pr-4">
                 <h3 className="text-2xl font-serif text-stone-800 leading-tight">{s.name}</h3>
-                {s.description && (
+                {s.description && !isCompleted && (
                   <div className="flex items-start gap-2 mt-2">
                     <Info size={12} className="text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-[10px] font-bold text-stone-400 leading-tight uppercase tracking-tight">{s.description}</p>
@@ -255,7 +292,7 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
                 if (!newHistory[todayKey]) newHistory[todayKey] = {};
                 newHistory[todayKey][s.id] = isCompleted ? null : { done: true, by: staffName };
                 onSave('history', newHistory);
-              }} className="p-4 rounded-full shadow-lg shrink-0" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
+              }} className="p-4 rounded-full shadow-lg shrink-0 transition-transform active:scale-90" style={{ backgroundColor: isCompleted ? colors.success : colors.background }}>
                 <CheckCircle2 className={`w-6 h-6 ${isCompleted ? 'text-white' : 'text-stone-300'}`} />
               </button>
             </div>
@@ -269,6 +306,7 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
                   todayKey={todayKey} 
                   quantities={quantities} 
                   onSave={onSave} 
+                  isCompleted={isCompleted}
                 />
               ))}
             </div>
@@ -279,7 +317,7 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
   );
 };
 
-// ... HistoryView, PinPad, AdminView, SupplierForm, NavButton remain same as before ...
+// ... HistoryView, PinPad, AdminView, SupplierForm, NavButton remain identical ...
 
 const HistoryView = ({ suppliers, history, quantities }) => {
   const complianceDays = Array.from({ length: 7 }, (_, i) => {
