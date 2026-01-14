@@ -4,7 +4,7 @@ import { getDatabase, ref, onValue, set } from "firebase/database";
 import {
   ShoppingCart, History, Settings, Wine, Plus, Edit3, Trash2, X, Loader2, 
   CheckCircle2, User, LogOut, AlertCircle, ListFilter, ClipboardList, 
-  AlertTriangle, Trash, FileText, BarChart3, Save, Calendar
+  AlertTriangle, Trash, FileText, BarChart3, Save, Calendar, ChevronRight
 } from 'lucide-react';
 
 // === FIREBASE CONFIG ===
@@ -25,10 +25,8 @@ const colors = { primary: '#8E3A3A', background: '#F4EBE2', textDark: '#432C2C',
 const ADMIN_PIN = "8923";
 
 const CafeOrderingApp = () => {
-  // Use sessionStorage: Clears on refresh/tab close
   const [staffName, setStaffName] = useState(sessionStorage.getItem('staffName') || '');
   const [isLoggedIn, setIsLoggedIn] = useState(!!sessionStorage.getItem('staffName'));
-  
   const [view, setView] = useState('orders');
   const [suppliers, setSuppliers] = useState([]);
   const [wastageItems, setWastageItems] = useState([]);
@@ -44,9 +42,13 @@ const CafeOrderingApp = () => {
   const todayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
   const displayDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
+  // FORCE LOGOUT ON RELOAD
   useEffect(() => {
+    const handleUnload = () => sessionStorage.clear();
+    window.addEventListener('beforeunload', handleUnload);
+    
     const dataRef = ref(db, 'cafe_data');
-    return onValue(dataRef, (snapshot) => {
+    const unsubscribe = onValue(dataRef, (snapshot) => {
       const data = snapshot.val() || {};
       setSuppliers(data.suppliers || []);
       setWastageItems(data.wastageItems || []);
@@ -56,6 +58,11 @@ const CafeOrderingApp = () => {
       setIncidents(data.incidents || {});
       setLoading(false);
     });
+
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      unsubscribe();
+    };
   }, []);
 
   const saveToFirebase = (path, data) => set(ref(db, `cafe_data/${path}`), data);
@@ -68,9 +75,9 @@ const CafeOrderingApp = () => {
         <form onSubmit={(e) => { e.preventDefault(); if(staffName.trim()){ sessionStorage.setItem('staffName', staffName); setIsLoggedIn(true); }}} className="w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl text-center border-t-8 border-[#8E3A3A]">
           <div className="bg-stone-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Wine className="text-stone-400" /></div>
           <h1 className="font-serif text-2xl mb-2">Bobby's</h1>
-          <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-8">Shift Authentication</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-8">Shift Login Required</p>
           <input autoFocus className="w-full p-4 rounded-2xl bg-stone-50 mb-4 outline-none text-center font-bold border-2 border-transparent focus:border-amber-200" placeholder="Enter Your Name" value={staffName} onChange={(e) => setStaffName(e.target.value)} />
-          <button type="submit" className="w-full py-4 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest">Login to Shift</button>
+          <button type="submit" className="w-full py-4 bg-stone-900 text-white rounded-full font-black uppercase tracking-widest">Start Shift</button>
         </form>
       </div>
     );
@@ -83,10 +90,10 @@ const CafeOrderingApp = () => {
           <div className="flex flex-col">
             <span className="text-3xl font-serif tracking-widest text-white uppercase leading-none">BOBBY'S</span>
             <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] font-bold tracking-widest text-white/60 uppercase">ACTIVE: {staffName}</span>
+                <span className="text-[10px] font-bold tracking-widest text-white/60 uppercase">{staffName} ON SHIFT</span>
             </div>
           </div>
-          <button onClick={() => { sessionStorage.removeItem('staffName'); setStaffName(''); setIsLoggedIn(false); }} className="bg-white/10 p-2 rounded-full"><LogOut size={18} className="text-white" /></button>
+          <button onClick={() => { sessionStorage.clear(); window.location.reload(); }} className="bg-white/10 p-2 rounded-full"><LogOut size={18} className="text-white" /></button>
         </div>
       </header>
 
@@ -120,6 +127,138 @@ const CafeOrderingApp = () => {
   );
 };
 
+// --- RESTORED SETUP IN ADMIN ---
+const AdminView = ({ suppliers, wastageItems, wastageData, incidents, onSaveSuppliers, onSaveWastageItems, onDeleteIncident, onLogout }) => {
+    const [tab, setTab] = useState('reports');
+    const [editingSupplier, setEditingSupplier] = useState(null);
+
+    const getTotals = () => {
+        const t = {};
+        Object.values(wastageData || {}).forEach(day => {
+            Object.entries(day?.items || {}).forEach(([id, val]) => {
+                const name = wastageItems.find(i => i.id.toString() === id)?.name || "Unknown";
+                t[name] = (t[name] || 0) + parseFloat(val);
+            });
+        });
+        return Object.entries(t).sort((a,b) => b[1] - a[1]);
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex bg-white rounded-full p-1 shadow-inner overflow-x-auto no-scrollbar">
+                {['reports', 'wastage-history', 'totals', 'setup'].map(t => (
+                    <button key={t} onClick={() => {setTab(t); setEditingSupplier(null);}} className={`flex-1 min-w-[100px] py-3 rounded-full text-[9px] font-black uppercase transition-all ${tab === t ? 'bg-stone-900 text-white' : 'text-stone-400'}`}>{t.replace('-', ' ')}</button>
+                ))}
+            </div>
+
+            {tab === 'setup' && !editingSupplier && (
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-[30px] shadow-sm">
+                        <h3 className="font-serif text-lg mb-4">Supplier Management</h3>
+                        {suppliers.map(s => (
+                            <button key={s.id} onClick={() => setEditingSupplier(s)} className="w-full flex justify-between items-center p-4 border-b last:border-0 hover:bg-stone-50">
+                                <span className="font-bold text-sm uppercase">{s.name}</span>
+                                <ChevronRight size={16} className="text-stone-300"/>
+                            </button>
+                        ))}
+                        <button onClick={() => onSaveSuppliers([...suppliers, {id: Date.now().toString(), name: 'New Supplier', items: [], days: []}])} className="w-full py-4 text-stone-400 text-[10px] font-black uppercase tracking-widest">+ Add New Supplier</button>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[30px] shadow-sm">
+                        <h3 className="font-serif text-lg mb-4">Wastage Item Setup</h3>
+                        {wastageItems.map(i => (
+                            <div key={i.id} className="flex gap-2 mb-2">
+                                <input className="flex-1 bg-stone-50 p-2 rounded-xl text-sm font-bold" value={i.name} onChange={e => onSaveWastageItems(wastageItems.map(x => x.id === i.id ? {...x, name: e.target.value} : x))} />
+                                <button onClick={() => onSaveWastageItems(wastageItems.filter(x => x.id !== i.id))} className="text-red-200"><X size={18}/></button>
+                            </div>
+                        ))}
+                        <button onClick={() => onSaveWastageItems([...wastageItems, {id: Date.now().toString(), name: 'New Item'}])} className="w-full py-4 text-stone-400 text-[10px] font-black uppercase tracking-widest">+ Add Wastage Item</button>
+                    </div>
+                </div>
+            )}
+
+            {tab === 'setup' && editingSupplier && (
+                <div className="bg-white p-6 rounded-[30px] shadow-sm space-y-4">
+                    <button onClick={() => setEditingSupplier(null)} className="text-[10px] font-black uppercase text-stone-400 underline mb-4">← Back to Setup</button>
+                    <input className="text-2xl font-serif w-full outline-none border-b-2 border-stone-100 pb-2" value={editingSupplier.name} onChange={e => {
+                        const updated = {...editingSupplier, name: e.target.value};
+                        setEditingSupplier(updated);
+                        onSaveSuppliers(suppliers.map(s => s.id === editingSupplier.id ? updated : s));
+                    }} />
+                    
+                    <div className="space-y-2 pt-4">
+                        <p className="text-[10px] font-black uppercase text-stone-400">Inventory Items & Par Levels</p>
+                        {editingSupplier.items?.map((item, idx) => (
+                            <div key={idx} className="flex gap-2">
+                                <input className="flex-1 bg-stone-50 p-2 rounded-xl text-xs font-bold" value={item.name} onChange={e => {
+                                    const newItems = [...editingSupplier.items]; newItems[idx].name = e.target.value;
+                                    const updated = {...editingSupplier, items: newItems}; setEditingSupplier(updated);
+                                    onSaveSuppliers(suppliers.map(s => s.id === editingSupplier.id ? updated : s));
+                                }} />
+                                <input className="w-16 bg-stone-50 p-2 rounded-xl text-xs text-center font-bold" placeholder="PAR" value={item.par || ''} onChange={e => {
+                                    const newItems = [...editingSupplier.items]; newItems[idx].par = e.target.value;
+                                    const updated = {...editingSupplier, items: newItems}; setEditingSupplier(updated);
+                                    onSaveSuppliers(suppliers.map(s => s.id === editingSupplier.id ? updated : s));
+                                }} />
+                            </div>
+                        ))}
+                        <button onClick={() => {
+                            const updated = {...editingSupplier, items: [...(editingSupplier.items || []), {id: Date.now(), name: '', par: ''}]};
+                            setEditingSupplier(updated);
+                            onSaveSuppliers(suppliers.map(s => s.id === editingSupplier.id ? updated : s));
+                        }} className="w-full py-2 bg-stone-50 rounded-xl text-[10px] font-black text-stone-400">+ Add Item</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Totals, Reports, and Wastage History tabs follow the same stable logic as before... */}
+            {tab === 'wastage-history' && (
+                <div className="space-y-4">
+                    {Object.entries(wastageData || {}).reverse().slice(0, 60).map(([date, data]) => (
+                        <div key={date} className="bg-white p-6 rounded-3xl border">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <span className="font-serif">{date}</span>
+                                <span className="text-[9px] font-black text-stone-300 uppercase">By {data.meta?.by || 'Unknown'}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {Object.entries(data.items || {}).map(([id, q]) => (
+                                    <div key={id} className="flex justify-between bg-stone-50 p-2 rounded-xl text-[10px]">
+                                        <span className="text-stone-400 font-bold uppercase">{wastageItems.find(i => i.id.toString() === id)?.name || 'Item'}</span>
+                                        <span className="font-black">{q}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            
+            {tab === 'reports' && (
+                <div className="space-y-4">
+                    {Object.entries(incidents || {}).reverse().map(([date, list]) => (
+                        <div key={date} className="bg-white p-6 rounded-3xl border-l-8 border-amber-400">
+                            <p className="text-[9px] font-black text-stone-400 uppercase mb-4">{date}</p>
+                            {list.map(r => (
+                                <div key={r.id} className="relative mb-4 border-b pb-4 last:border-0">
+                                    <p className="text-sm italic">"{r.note}"</p>
+                                    <div className="flex justify-between items-end mt-2"><span className="text-[8px] font-bold text-stone-300">{r.time} by {r.by}</span><button onClick={() => window.confirm('Delete?') && onDeleteIncident(date, r.id)} className="text-red-200"><Trash2 size={14}/></button></div>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {tab === 'totals' && <div className="bg-white p-8 rounded-[40px] shadow-xl">
+                {getTotals().map(([name, total]) => (
+                    <div key={name} className="flex justify-between border-b py-3 last:border-0"><span className="text-xs font-black uppercase text-stone-500">{name}</span><span className="font-serif text-lg">{total}</span></div>
+                ))}
+            </div>}
+        </div>
+    );
+};
+
+// Sub-components: OrdersView, HistoryView, PinPad, NavButton remain stable
 const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSave }) => {
     const [showAll, setShowAll] = useState(false);
     const dayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
@@ -143,12 +282,11 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
               <div className="space-y-2">
                 {s.items?.map(item => {
                   const qty = quantities[todayKey]?.[s.id]?.[item.id] || '';
-                  // Summarize logic: hide items with 0 or empty when completed
                   if (isCompleted && (!qty || qty === '0')) return null;
                   return (
                     <div key={item.id} className="flex items-center justify-between p-4 rounded-3xl bg-stone-50">
                         <span className="font-bold text-xs text-stone-600 uppercase">{item.name}</span>
-                        <input type="number" disabled={isCompleted} className={`w-16 p-2 rounded-xl text-center font-bold ${isCompleted ? 'bg-transparent border-none' : 'bg-white shadow-inner'}`} value={qty} onChange={(e) => {
+                        <input type="number" disabled={isCompleted} className="w-16 p-2 rounded-xl text-center font-bold bg-white shadow-inner" value={qty} onChange={(e) => {
                             const newQ = { ...quantities }; if (!newQ[todayKey]) newQ[todayKey] = {}; if (!newQ[todayKey][s.id]) newQ[todayKey][s.id] = {};
                             newQ[todayKey][s.id][item.id] = e.target.value; onSave('quantities', newQ);
                         }} />
@@ -166,16 +304,12 @@ const OrdersView = ({ staffName, todayKey, suppliers, history, quantities, onSav
 const OpsView = ({ displayDate, todayKey, wastageItems, wastageData, onSaveWastage, onSaveIncident, staffName }) => {
     const [incidentText, setIncidentText] = useState("");
     const [tempWastage, setTempWastage] = useState({});
-    
-    // Safely check if saved
     const isWastageSaved = !!wastageData?.[todayKey];
 
     const handleSave = () => {
         const newData = {...wastageData};
         newData[todayKey] = { meta: { by: staffName, time: new Date().toLocaleTimeString() }, items: {} };
-        wastageItems.forEach(item => {
-            newData[todayKey].items[item.id] = tempWastage[item.id] || "0";
-        });
+        wastageItems.forEach(item => { newData[todayKey].items[item.id] = tempWastage[item.id] || "0"; });
         onSaveWastage(newData);
     };
 
@@ -185,20 +319,17 @@ const OpsView = ({ displayDate, todayKey, wastageItems, wastageData, onSaveWasta
             <div className="bg-white rounded-[40px] p-6 shadow-xl">
                 <div className="flex items-center gap-2 mb-6"><Trash size={20} className="text-[#8E3A3A]"/> <h3 className="font-serif text-xl">Daily Wastage</h3></div>
                 <div className="space-y-2 mb-6">
-                    {wastageItems?.map(item => {
-                        const savedValue = wastageData?.[todayKey]?.items?.[item.id];
-                        return (
-                            <div key={item.id} className="flex justify-between items-center p-4 bg-stone-50 rounded-3xl">
-                                <span className="text-[10px] font-black uppercase text-stone-500">{item.name}</span>
-                                {isWastageSaved ? <span className="font-black text-stone-800">{savedValue || '0'}</span> : 
-                                <input type="number" className="w-16 p-2 rounded-xl text-center outline-none bg-white shadow-inner" placeholder="0" value={tempWastage[item.id] || ''} onChange={(e) => setTempWastage({...tempWastage, [item.id]: e.target.value})} />}
-                            </div>
-                        );
-                    })}
+                    {wastageItems?.map(item => (
+                        <div key={item.id} className="flex justify-between items-center p-4 bg-stone-50 rounded-3xl">
+                            <span className="text-[10px] font-black uppercase text-stone-500">{item.name}</span>
+                            {isWastageSaved ? <span className="font-black">{wastageData[todayKey].items?.[item.id] || '0'}</span> : 
+                            <input type="number" className="w-16 p-2 rounded-xl text-center outline-none bg-white shadow-inner" placeholder="0" value={tempWastage[item.id] || ''} onChange={(e) => setTempWastage({...tempWastage, [item.id]: e.target.value})} />}
+                        </div>
+                    ))}
                 </div>
                 {isWastageSaved ? (
-                    <div className="bg-stone-50 p-4 rounded-3xl flex items-center justify-center gap-2 text-[#5B8C5A] font-black uppercase text-[10px] border-2 border-stone-100">
-                        <CheckCircle2 size={16}/> Saved by {wastageData[todayKey].meta?.by}
+                    <div className="bg-stone-50 p-4 rounded-3xl flex items-center justify-center gap-2 text-[#5B8C5A] font-black uppercase text-[10px]">
+                        <CheckCircle2 size={16}/> Locked by {wastageData[todayKey].meta?.by}
                     </div>
                 ) : (
                     <button onClick={handleSave} className="w-full py-4 bg-stone-900 text-white rounded-full font-black uppercase text-[10px] flex justify-center gap-2 items-center"><Save size={16}/> Save & Lock All</button>
@@ -206,8 +337,8 @@ const OpsView = ({ displayDate, todayKey, wastageItems, wastageData, onSaveWasta
             </div>
             <div className="bg-white rounded-[40px] p-6 shadow-xl">
                 <div className="flex items-center gap-2 mb-4"><AlertTriangle size={20} className="text-amber-500"/> <h3 className="font-serif text-xl">Incident Report</h3></div>
-                <textarea className="w-full p-4 bg-stone-50 rounded-3xl min-h-[100px] outline-none text-sm mb-4" placeholder="Report breakage or issues..." value={incidentText} onChange={e => setIncidentText(e.target.value)} />
-                <button onClick={() => { if(!incidentText) return; onSaveIncident({note: incidentText}); setIncidentText(""); alert("Sent."); }} className="w-full py-4 border-2 border-stone-900 rounded-full font-black uppercase text-[10px] flex justify-center gap-2 items-center"><FileText size={16}/> Send Report</button>
+                <textarea className="w-full p-4 bg-stone-50 rounded-3xl min-h-[100px] outline-none text-sm mb-4" placeholder="Report breakage..." value={incidentText} onChange={e => setIncidentText(e.target.value)} />
+                <button onClick={() => { if(!incidentText) return; onSaveIncident({note: incidentText}); setIncidentText(""); }} className="w-full py-4 border-2 border-stone-900 rounded-full font-black uppercase text-[10px] flex justify-center gap-2 items-center"><FileText size={16}/> Send Report</button>
             </div>
         </div>
     );
@@ -244,77 +375,13 @@ const HistoryView = ({ suppliers, history, quantities }) => {
                             <div key={sId} className="mb-2">
                                 <p className="text-[10px] font-black text-[#8E3A3A] uppercase">{suppliers.find(s => s.id === sId)?.name}</p>
                                 <div className="flex flex-wrap gap-2 mt-1">{Object.entries(items).map(([id, q]) => q > 0 && (
-                                    <span key={id} className="text-[9px] font-bold bg-white px-2 py-1 rounded-full border">{suppliers.find(s => s.id === sId)?.items.find(i => i.id.toString() === id)?.name}: {q}</span>
+                                    <span key={id} className="text-[9px] font-bold bg-white px-2 py-1 rounded-full border">{suppliers.find(s => s.id === sId)?.items?.find(i => i.id.toString() === id)?.name}: {q}</span>
                                 ))}</div>
                             </div>
                         ))}
                     </div>
                 );
             })}
-        </div>
-    );
-};
-
-const AdminView = ({ suppliers, wastageItems, wastageData, incidents, onSaveSuppliers, onSaveWastageItems, onDeleteIncident, onLogout }) => {
-    const [tab, setTab] = useState('reports');
-    const getTotals = () => {
-        const t = {};
-        Object.values(wastageData || {}).forEach(day => {
-            Object.entries(day?.items || {}).forEach(([id, val]) => {
-                const name = wastageItems.find(i => i.id.toString() === id)?.name || "Unknown";
-                t[name] = (t[name] || 0) + parseFloat(val);
-            });
-        });
-        return Object.entries(t).sort((a,b) => b[1] - a[1]);
-    };
-    return (
-        <div className="space-y-6">
-            <div className="flex bg-white rounded-full p-1 shadow-inner overflow-x-auto no-scrollbar">
-                {['reports', 'wastage-history', 'totals', 'setup'].map(t => (
-                    <button key={t} onClick={() => setTab(t)} className={`flex-1 min-w-[100px] py-3 rounded-full text-[9px] font-black uppercase ${tab === t ? 'bg-stone-900 text-white' : 'text-stone-400'}`}>{t.replace('-', ' ')}</button>
-                ))}
-            </div>
-            {tab === 'wastage-history' && (
-                <div className="space-y-4">
-                    {Object.entries(wastageData || {}).reverse().slice(0, 60).map(([date, data]) => (
-                        <div key={date} className="bg-white p-6 rounded-3xl border">
-                            <div className="flex justify-between mb-4 border-b pb-2">
-                                <span className="font-serif">{date}</span>
-                                <span className="text-[9px] font-black text-stone-300 uppercase">By {data.meta?.by}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {Object.entries(data.items || {}).map(([id, q]) => (
-                                    <div key={id} className="flex justify-between bg-stone-50 p-2 rounded-xl text-[10px]">
-                                        <span className="text-stone-400 font-bold uppercase">{wastageItems.find(i => i.id.toString() === id)?.name}</span>
-                                        <span className="font-black">{q}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-            {tab === 'totals' && <div className="bg-white p-8 rounded-[40px] shadow-xl">
-                {getTotals().map(([name, total]) => (
-                    <div key={name} className="flex justify-between border-b py-3 last:border-0"><span className="text-xs font-black uppercase text-stone-500">{name}</span><span className="font-serif text-lg">{total}</span></div>
-                ))}
-            </div>}
-            {tab === 'reports' && <div className="space-y-4">
-                {Object.entries(incidents || {}).reverse().map(([date, list]) => (
-                    <div key={date} className="bg-white p-6 rounded-3xl border-l-8 border-amber-400">
-                        <p className="text-[9px] font-black text-stone-400 uppercase mb-4">{date}</p>
-                        {list.map(r => (
-                            <div key={r.id} className="relative mb-4 border-b pb-4 last:border-0">
-                                <p className="text-sm italic">"{r.note}"</p>
-                                <div className="flex justify-between items-end mt-2"><span className="text-[8px] font-bold text-stone-300">{r.time} by {r.by}</span><button onClick={() => onDeleteIncident(date, r.id)} className="text-red-200"><Trash2 size={14}/></button></div>
-                            </div>
-                        ))}
-                    </div>
-                ))}
-            </div>}
-            {tab === 'setup' && <div className="space-y-6">
-                <button onClick={onLogout} className="w-full py-4 bg-red-50 text-red-500 font-black rounded-3xl uppercase text-[10px]">Lock Management</button>
-            </div>}
         </div>
     );
 };
